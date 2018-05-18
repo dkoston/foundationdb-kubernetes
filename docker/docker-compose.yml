@@ -4,3 +4,14 @@ services:
     build: .
     environment:
       FDB_COORDINATORS: "docker_fdb_1"
+      VIRTUAL_HOST: "localhost"
+    expose:
+      - "4500"
+    depends_on:
+      - nginx
+  nginx:
+      image: jwilder/nginx-proxy
+      volumes:
+        - "/var/run/docker.sock:/tmp/docker.sock:ro"
+      ports:
+        - "4500:80"
