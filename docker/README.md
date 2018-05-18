@@ -1,55 +1,32 @@
-# foundationdb-kubernetes
+# docker
 
-## Under development
+The following setup allows you to spin up a FoundationDB cluster on docker-compose
 
-Docker image for running FoundationDB on kubernetes as a statefulset.
+To start the cluster:
 
-## Quickstart with docker-compose
+- `npm start`
 
-```
-# Start first node
-docker-compose up -d --build
+Restart:
 
-# Setup database
-docker-compose exec fdb fdbcli --exec "configure new single memory"
-> Database created
+- `npm run restart`
 
-# Verify status and wait for first node to be healthy
-docker-compose exec fdb fdbcli --exec status
-> ...
-> Data:
->   Replication health     - (Re)initializing automatic data distribution
-> ...
-> Data:
->   Replication health     - Healthy
-> ...
+Stop the cluster:
 
-# Scale up
-docker-compose up -d --scale fdb=2
+- `npm stop`
 
-# Verify status and see second node
-docker-compose exec fdb fdbcli --exec status
-> ...
-> Cluster:
->   FoundationDB processes - 2
->   Machines               - 2
-> ...
-> Data:
->   Replication health     - (Re)initializing automatic data distribution
-> ...
-> Data:
->   Replication health     - Healthy
-> ...
+NOTE: Right now foundationdb is running in memory so nothing is saved on restart.
 
-# Add more nodes
-# docker-compose up -d --scale fdb=<n>
+TODO: Add volume mounts for data to save the DB data
 
-# Destroy
-docker-compose down
-```
+to see what is running (or failed):
 
-### Pending
+- `docker ps -a`
 
-- Automatic scaledown/failover
-- Automatic memory tuning based on cgroup/k8s memory requests/limits
-- Allow tweaking fdbserver configuration flags
+to get logs for a container:
+
+- `docker logs -f <container_name>`
+
+to enter a container:
+
+- `docker exec -it <container_name> bash`
+

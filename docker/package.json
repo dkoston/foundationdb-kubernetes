@@ -1,0 +1,30 @@
+{
+  "name": "development-setup",
+  "version": "1.0.0",
+  "description": "Runs foundationdb on docker-compose",
+  "main": "docker-compose.yml",
+  "scripts": {
+    "clean": "rm -rf foundationdb-data/*",
+    "restart": "npm stop && npm start",
+    "restart:clean": "npm stop:clean && npm:start",
+    "start": "./fdb-cluster.sh up",
+    "stop": "./fdb-cluster.sh down",
+    "stop:clean": "npm stop && npm run clean"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dkoston/foundationdb-kubernetes.git"
+  },
+  "keywords": [
+    "docker"
+  ],
+  "author": "Dave Koston <dkoston@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dkoston/foundationdb-kubernetes/issues"
+  },
+  "homepage": "https://github.com/dkoston/foundationdb-kubernetes#readme",
+  "dependencies": {
+    "npm": "^5.7.1"
+  }
+}
