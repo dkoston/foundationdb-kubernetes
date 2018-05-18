@@ -1,0 +1,5 @@
+*.iml
+.idea/
+foundationdb-data/*
+node_modules
+
