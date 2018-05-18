@@ -23,5 +23,5 @@ gosu foundationdb:foundationdb /usr/sbin/fdbserver \
   --datadir $FDB_HOME/data \
   --logdir $FDB_HOME/logs \
   --machine_id $(hostname) \
-  --listen_address public \
-  --public_address auto:4500
+  --listen_address 0.0.0.0:4500 \
+  --public_address 127.0.0.1:4500

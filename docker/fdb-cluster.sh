@@ -4,14 +4,19 @@ set -e
 ####### CONFIGURATION ########
 MAX_HEALTH_CHECKS=20    # Maximum times to check the health of each fdb node before failing
 HEALTH_CHECK_DELAY=5    # seconds to wait between health checks
-STORAGE_ENGINE=memory   # https://apple.github.io/foundationdb/command-line-interface.html#storage-engine
-REDUNDANCY_MODE=double  # https://apple.github.io/foundationdb/command-line-interface.html#redundancy-mode
 #############################
 
 DEFAULT_NODE_COUNT=3
+DEFAULT_REDUNDANCY_MODE=double
+DEFAULT_STORAGE_ENGINE=memory
 HEALTH_CHECK_COUNT=0
 NAME="[fdb-cluster]: "
 
+
+COMMAND=$1
+DESIRED_NODE_COUNT=$2
+REDUNDANCY_MODE=$3
+STORAGE_ENGINE=$4
 
 log() {
     echo "${NAME} $1"
@@ -64,12 +69,14 @@ verifyContainerHealth() {
 
     local NODE_NUMBER=$1
     local CURRENT_DIRECTORY=${PWD##*/}
-    local CONTAINER_STATUS=$(docker ps -a --format '{{.Names}} {{.Status}}' | grep "${CURRENT_DIRECTORY}_fdb_${NODE_NUMBER}" | awk '{print $2}')
+    local CONTAINER_NAME=${CURRENT_DIRECTORY}_fdb_${NODE_NUMBER}
+    local CONTAINER_STATUS=$(docker ps -a --format '{{.Names}} {{.Status}}' | grep "${CONTAINER_NAME}" | awk '{print $2}')
     local STATUS_REGEX='^Up'
     if ! [[ "${CONTAINER_STATUS}" =~ ${STATUS_REGEX} ]]; then
         log "Docker container failed: ${CONTAINER_STATUS}"
         exit 5
     fi
+    log "${CONTAINER_NAME} is running"
 }
 
 scaleCluster() {
@@ -88,9 +95,43 @@ scaleCluster() {
     verifyContainerHealth ${NODES}
 }
 
+setCoordinators() {
+    local REGEX='^[0-9]+$'
+
+    local NODES=$1
+
+    if ! [[ ${NODES} =~ ${REGEX} ]]; then
+        log "setCoordinators() must be called with an integer"
+        exit 2
+    fi
+
+    local COORDINATORS=""
+
+    for (( n=1; n<=$1; n++ )); do
+        local CONTAINER_NAME="docker_fdb_$n"
+        local IP_ADDRESS=$(docker inspect -f "{{ .NetworkSettings.Networks.docker_default.IPAddress }}" ${CONTAINER_NAME})
+        COORDINATORS="$COORDINATORS ${IP_ADDRESS}:4500"
+    done
+
+    log "Setting coordinators to: ${COORDINATORS}"
+    docker exec -it docker_fdb_1 sh -c "fdbcli --exec 'coordinators ${COORDINATORS}'"
+    HEALTH_CHECK_COUNT=0
+    verifyHealth ${NODES}
+}
+
 configureReplication() {
+    local REGEX='^[0-9]+$'
+
+    if ! [[ $1 =~ ${REGEX} ]]; then
+        log "configureReplication() must be called with an integer"
+        exit 2
+    fi
+
     log "Setting replication to ${REDUNDANCY_MODE} ${STORAGE_ENGINE}"
     docker-compose exec fdb fdbcli --exec "configure ${REDUNDANCY_MODE} ${STORAGE_ENGINE}"
+    HEALTH_CHECK_COUNT=0
+    verifyHealth 1
+    setCoordinators 3
 }
 
 startFirstNode() {
@@ -109,11 +150,20 @@ startFirstNode() {
     verifyContainerHealth 1
 
     log "Configuring database on ${CONTAINER_NAME}"
-    docker-compose exec fdb fdbcli --exec "configure new single memory"
+    docker exec -it ${CONTAINER_NAME} sh -c 'fdbcli --exec "configure new single memory"'
     verifyHealth 1
 }
 
+
 startCluster() {
+    log "Starting FoundationDB cluster via docker-compose"
+    log "Cluster details:"
+    log "-----------------------"
+    log "NODES: $DESIRED_NODE_COUNT"
+    log "REDUNDANCY: $REDUNDANCY_MODE"
+    log "STORAGE ENGINE: $STORAGE_ENGINE"
+    log "-----------------------"
+
     startFirstNode
     local SIZE=1
 
@@ -122,20 +172,34 @@ startCluster() {
         let SIZE=${n}+1
         scaleCluster ${SIZE}
     done
-    
-    configureReplication
-    verifyHealth ${SIZE}
+
+
+    if ! [[ "$REDUNDANCY_MODE" == "single" ]]; then
+        configureReplication ${DESIRED_NODE_COUNT}
+        return
+    fi
+
+    if ! [[ "$STORAGE_ENGINE" == "memory" ]]; then
+        if ! [[ "$REDUNDANCY_MODE" == "single" ]]; then
+            configureReplication ${DESIRED_NODE_COUNT}
+        fi
+    fi
 }
 
 stopCluster() {
     docker-compose down
 }
 
-COMMAND=$1
-DESIRED_NODE_COUNT=$2
-
 if [[ "$DESIRED_NODE_COUNT" == "" ]]; then
     DESIRED_NODE_COUNT=${DEFAULT_NODE_COUNT}
+fi
+
+if [[ "$REDUNDANCY_MODE" == "" ]]; then
+    REDUNDANCY_MODE=${DEFAULT_REDUNDANCY_MODE}
+fi
+
+if [[ "$STORAGE_ENGINE" == "" ]]; then
+    STORAGE_ENGINE=${DEFAULT_STORAGE_ENGINE}
 fi
 
 if [[ "$COMMAND" == "up" ]]; then
@@ -146,6 +210,6 @@ elif [[ "$COMMAND" == "restart" ]]; then
     stopCluster
     startCluster
 else
-    echo "Usage: ./fdb-cluster.sh <up|down|restart> <node_count>"
+    echo "Usage: ./fdb-cluster.sh <up|down|restart> <node_count> <redundancy_mode> <storage_engine>"
 fi
 

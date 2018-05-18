@@ -5,4 +5,4 @@ services:
     environment:
       FDB_COORDINATORS: "docker_fdb_1"
     ports:
-      - "4500-4502:4500"
+      - "4500:4500"
