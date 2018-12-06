@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM buildpack-deps:jessie-curl
 
 ADD scripts/prepare.sh /prepare.sh
 RUN /prepare.sh
